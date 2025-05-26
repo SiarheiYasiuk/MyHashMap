@@ -1,6 +1,6 @@
 package org.myhashmap;
 
-import java.util.Arrays;
+import java.util.*;
 
 public class MyHashMap<K, V> {
     private static final int DEFAULT_CAPACITY = 16;
@@ -38,7 +38,7 @@ public class MyHashMap<K, V> {
         return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
     }
 
-    static class Node<K, V> {
+    static class Node<K, V> implements Map.Entry<K, V> {
         final int hash;
         final K key;
         V value;
@@ -54,6 +54,27 @@ public class MyHashMap<K, V> {
         public final K getKey()        { return key; }
         public final V getValue()      { return value; }
         public final String toString() { return key + "=" + value; }
+
+        public final V setValue(V newValue) {
+            V oldValue = value;
+            value = newValue;
+            return oldValue;
+        }
+
+        public final boolean equals(Object o) {
+            if (o == this)
+                return true;
+            if (o instanceof Map.Entry) {
+                Map.Entry<?,?> e = (Map.Entry<?,?>)o;
+                return Objects.equals(key, e.getKey()) &&
+                        Objects.equals(value, e.getValue());
+            }
+            return false;
+        }
+
+        public final int hashCode() {
+            return Objects.hashCode(key) ^ Objects.hashCode(value);
+        }
     }
 
     private static int hash(Object key) {
@@ -268,6 +289,115 @@ public class MyHashMap<K, V> {
         if ((tab = table) != null && size > 0) {
             size = 0;
             Arrays.fill(tab, null);
+        }
+    }
+
+    public Set<K> keySet() {
+        return new KeySet();
+    }
+
+    public Set<Map.Entry<K, V>> entrySet() {
+        return new EntrySet();
+    }
+
+    public Collection<V> values() {
+        return new Values();
+    }
+
+    abstract class HashIterator {
+        Node<K,V> next;
+        Node<K,V> current;
+        int index;
+
+        HashIterator() {
+            current = null;
+            next = null;
+            Node<K,V>[] t = table;
+            if (t != null && size > 0) {
+                do {} while (index < t.length && (next = t[index++]) == null);
+            }
+        }
+
+        public final boolean hasNext() {
+            return next != null;
+        }
+
+        final Node<K,V> nextNode() {
+            Node<K,V>[] t;
+            Node<K,V> e = next;
+            if (e == null)
+                throw new NoSuchElementException();
+            if ((next = (current = e).next) == null && (t = table) != null) {
+                do {} while (index < t.length && (next = t[index++]) == null);
+            }
+            return e;
+        }
+
+        public final void remove() {
+            Node<K,V> p = current;
+            if (p == null)
+                throw new IllegalStateException();
+            current = null;
+            removeNode(p.hash, p.key, null, false);
+        }
+    }
+
+    final class KeyIterator extends HashIterator implements Iterator<K> {
+        public final K next() { return nextNode().key; }
+    }
+
+    final class ValueIterator extends HashIterator implements Iterator<V> {
+        public final V next() { return nextNode().value; }
+    }
+
+    final class EntryIterator extends HashIterator implements Iterator<Map.Entry<K,V>> {
+        public final Map.Entry<K,V> next() { return nextNode(); }
+    }
+
+    final class KeySet extends AbstractSet<K> {
+        public final int size()                 { return size; }
+        public final void clear()               { MyHashMap.this.clear(); }
+        public final Iterator<K> iterator()     { return new KeyIterator(); }
+        public final boolean contains(Object o) { return containsKey(o); }
+        public final boolean remove(Object key) {
+            return removeNode(hash(key), key, null, false) != null;
+        }
+    }
+
+    final class EntrySet extends AbstractSet<Map.Entry<K,V>> {
+        public final int size()                 { return size; }
+        public final void clear()               { MyHashMap.this.clear(); }
+        public final Iterator<Map.Entry<K,V>> iterator() {
+            return new EntryIterator();
+        }
+        public final boolean contains(Object o) {
+            if (!(o instanceof Map.Entry))
+                return false;
+            Map.Entry<?,?> e = (Map.Entry<?,?>) o;
+            Object key = e.getKey();
+            Node<K,V> candidate = getNode(hash(key), key);
+            return candidate != null && candidate.equals(e);
+        }
+        public final boolean remove(Object o) {
+            if (o instanceof Map.Entry) {
+                Map.Entry<?,?> e = (Map.Entry<?,?>) o;
+                Object key = e.getKey();
+                Object value = e.getValue();
+                return removeNode(hash(key), key, value, true) != null;
+            }
+            return false;
+        }
+    }
+
+    final class Values extends AbstractCollection<V> {
+        public final int size()                 { return size; }
+        public final void clear()               { MyHashMap.this.clear(); }
+        public final Iterator<V> iterator()     { return new ValueIterator(); }
+        public final boolean contains(Object o) {
+            for (V v : this)
+                if (v.equals(o))
+                    return true;
+            return false;
         }
     }
 }
